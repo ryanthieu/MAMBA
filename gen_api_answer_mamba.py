@@ -10,16 +10,13 @@ import time
 import concurrent.futures
 import requests
 
-import openai
 import shortuuid
 import tqdm
 
 from fastchat.llm_judge.common import (
     load_questions,
     temperature_config,
-    chat_completion_openai,
-    chat_completion_anthropic,
-    chat_completion_palm,
+
 )
 from fastchat.llm_judge.gen_model_answer import reorg_answer_file
 from fastchat.model.model_adapter import get_conversation_template, ANTHROPIC_MODEL_LIST
@@ -112,31 +109,38 @@ TURN_TEMPLATE = """{answer}
 """
 MAMBA_URL = "http://192.168.202.2:5000"
 
-def format_mamba_input(question, turns):
+def format_mamba_input(question, prev_answer):
     prompt = URIAL_TEMPLATE.format(query=question['inputs'][0])
     # Add turns
-    turn = question['inputs'][1]
-    if turn:
-        prompt += TURN_TEMPLATE.format(answer=turn, query=question['inputs'][1])
+    if prev_answer:
+        prompt += TURN_TEMPLATE.format(answer=prev_answer, query=question['inputs'][1])
     return prompt
-    
+
+# As a sanity check
+test_case = {
+   "inputs": ["Write a recipe about cooking chicken breast", "How many ingredients are listed in the above recipe"]
+}
+print(format_mamba_input(test_case, None)) # Turn one
+print(format_mamba_input(test_case, "This is a delicious recipe")) # Turn two
+
 
 def chat_completion_mamba(model, inp, temperature, max_tokens):
     headers = {'Content-Type': 'application/json'}
     
     tokens_to_generate = int(eval(input("Enter number of tokens to generate: ")))
     data = {"prompts": [URIAL_TEMPLATE], "tokens_to_generate": tokens_to_generate}
-    response = requests.put(MAMBA_URL, data=json.dumps(data), headers=headers)
+    try:
+        #try to intialize response variable 
+        response = requests.put(MAMBA_URL, data=json.dumps(data), headers=headers)
+    except Exception as e:
+        #print error message
+        print(f"An error occurred: {e}")
+        response = None  
+
     # Check if # Query is in the response
     first_instance = response.index("# Query")
-    second_instance = response.index("# Query", first_instance + 1)
-    third_instance = response.index("#Query", second_instance + 1)
-    fourth_instance = response.index("#Query", third_instance + 1)
-    fifth_instance = response.index("#Query", fourth_instance + 1)
-    sixth_instance = response.index("#Query", fifth_instance + 1)
-    response = response[:sixth_index]
-
-
+    response = response[:first_instance]
+    # check edge case, try except
 
 def get_answer(
     question: dict, model: str, num_choices: int, max_tokens: int, answer_file: str
@@ -156,16 +160,16 @@ def get_answer(
     choices = []
     chat_state = None  # for palm-2 model
     for i in range(num_choices):
-         conv = get_conversation_template(/workspace/models/mamba2-hybrid-8b-3t-4k)
+         conv = get_conversation_template("/workspace/models/mamba2-hybrid-8b-3t-4k")
 
-        turns = []
-        for j in range(len(question["turns"])):
-            conv.append_message(conv.roles[0], question["turns"][j])
-            conv.append_message(conv.roles[1], None)
-            inp = format_mamba_input(question, turns)
-            output = chat_completion_mamba(model, inp, temperature, max_tokens)
+    turns = []
+    for j in range(len(question["turns"])):
+        conv.append_message(conv.roles[0], question["turns"][j])
+        conv.append_message(conv.roles[1], None)
+        inp = format_mamba_input(question, turns)
+        output = chat_completion_mamba(model, inp, temperature, max_tokens)
 
-            turns.append(output)
+        turns.append(output)
 
         choices.append({"index": i, "turns": turns})
 
