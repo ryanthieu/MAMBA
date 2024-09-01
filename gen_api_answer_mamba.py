@@ -3,6 +3,8 @@
 Usage:
 python3 gen_api_answer.py --model gpt-3.5-turbo
 """
+
+
 import argparse
 import json
 import os
@@ -13,10 +15,11 @@ import requests
 import shortuuid
 import tqdm
 
+
+
 from fastchat.llm_judge.common import (
     load_questions,
-    temperature_config,
-
+    temperature_config
 )
 from fastchat.llm_judge.gen_model_answer import reorg_answer_file
 from fastchat.model.model_adapter import get_conversation_template, ANTHROPIC_MODEL_LIST
@@ -226,8 +229,7 @@ if __name__ == "__main__":
     parser.add_argument("--openai-api-base", type=str, default=None)
     args = parser.parse_args()
 
-    if args.openai_api_base is None:
-      openai.api_base = "http://192.168.169.2:5000"
+
 
     question_file = f"data/{args.bench_name}/question.jsonl"
     questions = load_questions(question_file, args.question_begin, args.question_end)
