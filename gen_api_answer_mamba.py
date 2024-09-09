@@ -1,7 +1,7 @@
 """Generate answers with Mamba
 
 Usage:
-python3 gen_api_answer.py --model gpt-3.5-turbo
+python gen_api_answer_mamba.py --model mamba2-hybrid-8b-3t-128k
 """
 
 
@@ -15,11 +15,10 @@ import requests
 import shortuuid
 import tqdm
 
-
-
 from fastchat.llm_judge.common import (
     load_questions,
-    temperature_config
+    temperature_config,
+
 )
 from fastchat.llm_judge.gen_model_answer import reorg_answer_file
 from fastchat.model.model_adapter import get_conversation_template, ANTHROPIC_MODEL_LIST
@@ -110,21 +109,66 @@ TURN_TEMPLATE = """{answer}
 # Answer:
 ```
 """
-MAMBA_URL = "http://192.168.202.2:5000"
+
+MAMBA_URL = "http://192.168.100.2:5000/api"
+
+import requests
+import json
+
+
+def chat_completion_mamba(model, inp, temperature, max_tokens):
+    headers = {'Content-Type': 'application/json'}
+    data = {"prompts": [inp], "tokens_to_generate": max_tokens}
+    try:
+        response = requests.put(MAMBA_URL, data=json.dumps(data), headers=headers)
+        response.raise_for_status()
+        response_data = response.json()
+        print(f"Response Data: {response_data}")  # Debug: print the response
+        return response_data.get('text', '')[0]  # Adjust based on actual response structure
+    except requests.exceptions.RequestException as e:
+        print(f"An error occurred: {e}")
+        return ""
 
 def format_mamba_input(question, prev_answer):
-    prompt = URIAL_TEMPLATE.format(query=question['inputs'][0])
-    # Add turns
+    prompt = URIAL_TEMPLATE.format(query=question['turns'][0])
     if prev_answer:
-        prompt += TURN_TEMPLATE.format(answer=prev_answer, query=question['inputs'][1])
+        prompt += TURN_TEMPLATE.format(answer=prev_answer, query=question['turns'][1])
+    print(f"Formatted Prompt: {prompt}")  # Debug: print formatted prompt
     return prompt
 
-# As a sanity check
-test_case = {
-   "inputs": ["Write a recipe about cooking chicken breast", "How many ingredients are listed in the above recipe"]
-}
-print(format_mamba_input(test_case, None)) # Turn one
-print(format_mamba_input(test_case, "This is a delicious recipe")) # Turn two
+def get_answer(question, model, num_choices, max_tokens, answer_file):
+    temperature = args.force_temperature or question.get("required_temperature", 0.7)
+    choices = []
+    turns = []
+    for _ in range(num_choices):
+        inp = format_mamba_input(question, turns[-1] if turns else None)
+        output = chat_completion_mamba(model, inp, temperature, max_tokens)
+        turns.append(output)
+        choices.append({"index": len(turns) - 1, "turns": turns})
+
+    ans = {
+        "question_id": question["question_id"],
+        "answer_id": shortuuid.uuid(),
+        "model_id": model,
+        "choices": choices,
+        "tstamp": time.time(),
+    }
+
+    os.makedirs(os.path.dirname(answer_file), exist_ok=True)
+    with open(answer_file, "a") as fout:
+        fout.write(json.dumps(ans) + "\n")
+
+
+"""def format_mamba_input(question, prev_answer):
+
+    prompt = URIAL_TEMPLATE.format(query=question['turns'][0])
+    # Add turns
+    if prev_answer:
+        prompt += TURN_TEMPLATE.format(answer=prev_answer, query=question['turns'][1])
+    return prompt
+
+
+
 
 
 def chat_completion_mamba(model, inp, temperature, max_tokens):
@@ -162,13 +206,10 @@ def get_answer(
 
     choices = []
     chat_state = None  # for palm-2 model
-    for i in range(num_choices):
-         conv = get_conversation_template("/workspace/models/mamba2-hybrid-8b-3t-4k")
+    
 
     turns = []
     for j in range(len(question["turns"])):
-        conv.append_message(conv.roles[0], question["turns"][j])
-        conv.append_message(conv.roles[1], None)
         inp = format_mamba_input(question, turns)
         output = chat_completion_mamba(model, inp, temperature, max_tokens)
 
@@ -187,7 +228,7 @@ def get_answer(
 
     os.makedirs(os.path.dirname(answer_file), exist_ok=True)
     with open(answer_file, "a") as fout:
-        fout.write(json.dumps(ans) + "\n")
+        fout.write(json.dumps(ans) + "\n")"""
 
 
 if __name__ == "__main__":
@@ -226,12 +267,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--parallel", type=int, default=1, help="The number of concurrent API calls."
     )
-    parser.add_argument("--openai-api-base", type=str, default=None)
+    #parser.add_argument("--openai-api-base", type=str, default=None)
     args = parser.parse_args()
 
 
 
-    question_file = f"data/{args.bench_name}/question.jsonl"
+    question_file = f"/workspace/FastChat/fastchat/llm_judge/data/mt_bench/question.jsonl"
     questions = load_questions(question_file, args.question_begin, args.question_end)
 
     if args.answer_file:
