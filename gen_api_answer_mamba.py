@@ -18,8 +18,8 @@ import tqdm
 from fastchat.llm_judge.common import (
     load_questions,
     temperature_config,
-
 )
+
 from fastchat.llm_judge.gen_model_answer import reorg_answer_file
 from fastchat.model.model_adapter import get_conversation_template, ANTHROPIC_MODEL_LIST
 
@@ -110,42 +110,48 @@ TURN_TEMPLATE = """{answer}
 ```
 """
 
-MAMBA_URL = "http://192.168.100.2:5000/api"
+MAMBA_URL = "http://127.0.0.1:5000/api"
 
 import requests
 import json
 
 
+
+
 def chat_completion_mamba(model, inp, temperature, max_tokens):
     headers = {'Content-Type': 'application/json'}
     data = {"prompts": [inp], "tokens_to_generate": max_tokens}
-    try:
-        response = requests.put(MAMBA_URL, data=json.dumps(data), headers=headers)
-        response.raise_for_status()
-        response_data = response.json()
-        print(f"Response Data: {response_data}")  # Debug: print the response
-        return response_data.get('text', '')[0]  # Adjust based on actual response structure
-    except requests.exceptions.RequestException as e:
-        print(f"An error occurred: {e}")
-        return ""
-
-def format_mamba_input(question, prev_answer):
-    prompt = URIAL_TEMPLATE.format(query=question['turns'][0])
-    if prev_answer:
-        prompt += TURN_TEMPLATE.format(answer=prev_answer, query=question['turns'][1])
-    print(f"Formatted Prompt: {prompt}")  # Debug: print formatted prompt
-    return prompt
+    
+    response = requests.put(MAMBA_URL, data=json.dumps(data), headers=headers)
+    response.raise_for_status()
+    response_data = response.json()
+    return response_data.get('text', '')[0][len(inp):] 
 
 def get_answer(question, model, num_choices, max_tokens, answer_file):
+    """
+    Generate answers for a given question, handle the conversation turns, and write the output to a file.
+
+    Args:
+        question (dict): The question data with conversation turns.
+        model (str): The model identifier.
+        num_choices (int): The number of choices to generate.
+        max_tokens (int): The maximum number of tokens to generate.
+        answer_file (str): The path to the file where answers will be saved.
+    """
     temperature = args.force_temperature or question.get("required_temperature", 0.7)
     choices = []
     turns = []
+
     for _ in range(num_choices):
         inp = format_mamba_input(question, turns[-1] if turns else None)
+        
         output = chat_completion_mamba(model, inp, temperature, max_tokens)
-        turns.append(output)
-        choices.append({"index": len(turns) - 1, "turns": turns})
-
+        
+        answer = output.strip()
+        turns.append(answer)
+        
+        choices.append({"index": len(turns) - 1, "turns": turns.copy()})
+    
     ans = {
         "question_id": question["question_id"],
         "answer_id": shortuuid.uuid(),
@@ -153,10 +159,25 @@ def get_answer(question, model, num_choices, max_tokens, answer_file):
         "choices": choices,
         "tstamp": time.time(),
     }
-
     os.makedirs(os.path.dirname(answer_file), exist_ok=True)
     with open(answer_file, "a") as fout:
         fout.write(json.dumps(ans) + "\n")
+
+def format_mamba_input(question, prev_answer):
+   
+    first_query = question['turns'][0]
+    second_query = question['turns'][1] if len(question['turns']) > 1 else ""
+
+    prompt = URIAL_TEMPLATE.format(query=first_query)
+    
+    if prev_answer:
+        prompt += TURN_TEMPLATE.format(answer=prev_answer, query=second_query)
+    else:
+        prompt += TURN_TEMPLATE.format(answer="", query=second_query)
+
+    return prompt
+
+
 
 
 """def format_mamba_input(question, prev_answer):
