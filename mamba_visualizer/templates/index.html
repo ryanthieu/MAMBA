@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Search Examples</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+        .navbar {
+            display: flex;
+            justify-content: center;
+            padding: 20px;
+            background-color: #333;
+            color: white;
+        }
+        .navbar a {
+            margin: 0 15px;
+            color: white;
+            text-decoration: none;
+            font-size: 18px;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            text-align: center;
+        }
+        .search-box {
+            margin: 30px 0;
+        }
+        .search-box input, .search-box select {
+            width: 30%;
+            padding: 10px;
+            font-size: 16px;
+            margin: 5px;
+            text-align: center;
+        }
+        .result-box {
+            background-color: #f9f9f9;
+            color: black;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 8px;
+            text-align: left;
+            word-wrap: break-word;
+        }
+        .highlight {
+            background-color: yellow;
+        }
+        .role {
+            font-weight: bold;
+            margin-top: 10px;
+        }
+        .question, .response {
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="navbar">
+        <a href="/">Home</a>
+        <a href="/search">Search</a>
+    </div>
+
+    <div class="container">
+        <div class="search-box">
+            <input id="searchInput" type="text" placeholder="Type your search query...">
+            <select id="categorySelect">
+                <option value="">Select Category</option>
+                <option value="writing">Writing</option>
+                <option value="roleplay">Roleplay</option>
+                <option value="reasoning">Reasoning</option>
+                <option value="math">Math</option>
+                <option value="coding">Coding</option>
+                <option value="extraction">Extraction</option>
+                <option value="stem">STEM</option>
+                <option value="humanities">Humanities</option>
+            </select>
+            <input id="idInput" type="text" placeholder="Question ID">
+        </div>
+        <div id="search-results"></div>
+    </div>
+
+    <script>
+        function updateResults() {
+            const query = document.getElementById('searchInput').value.trim();
+            const category = document.getElementById('categorySelect').value;
+            const id = document.getElementById('idInput').value.trim();
+            fetch(`/search_examples?q=${query}&category=${category}&id=${id}`)
+                .then(response => response.json())
+                .then(data => {
+                    displayResults(data, query);
+                });
+        }
+
+        document.getElementById('searchInput').addEventListener('input', updateResults);
+        document.getElementById('categorySelect').addEventListener('change', updateResults);
+        document.getElementById('idInput').addEventListener('input', updateResults);
+
+        function highlightText(text, query) {
+            const regex = new RegExp(`(${query})`, 'gi');
+            return text.replace(regex, '<span class="highlight">$1</span>');
+        }
+
+        function displayResults(results, query) {
+            const resultsContainer = document.getElementById('search-results');
+            resultsContainer.innerHTML = '';
+
+            if (results.length > 0) {
+                results.forEach(example => {
+                    const exampleDiv = document.createElement('div');
+                    exampleDiv.classList.add('result-box');
+
+                    // Display the question
+                    const questionDiv = document.createElement('div');
+                    questionDiv.classList.add('question');
+                    questionDiv.innerHTML = `<strong>Question:</strong> ${highlightText(example.question_turns.join(' '), query)}`;
+                    exampleDiv.appendChild(questionDiv);
+
+                    // Display the responses
+                    example.response_turns.forEach((response, index) => {
+                        const responseDiv = document.createElement('div');
+                        responseDiv.classList.add('response');
+                        responseDiv.innerHTML = `<strong>Response ${index + 1}:</strong> ${highlightText(response, query)}`;
+                        exampleDiv.appendChild(responseDiv);
+                    });
+
+                    resultsContainer.appendChild(exampleDiv);
+                });
+            } else {
+                resultsContainer.innerHTML = '<p>No results found.</p>';
+            }
+        }
+
+        // Load all examples initially
+        updateResults();
+    </script>
+
+</body>
+</html>
